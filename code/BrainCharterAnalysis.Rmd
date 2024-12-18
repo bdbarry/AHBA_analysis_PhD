@@ -1,0 +1,1366 @@
+---
+title: "Chapter two compiled markdown"
+author: "Ben Barry"
+date: "2024-09-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#This markdown contains the code used to generate the figures present in BrainCharter.
+
+#load required libraries
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(ggpubr)
+library(factoextra)
+library(dbscan)
+library(umap)
+library(ggbeeswarm)
+library(clusterProfiler)
+library(readxl)
+```
+
+#colours for plotting
+```{r}
+library(wesanderson)
+LfAq_cont = wes_palette("Zissou1", 100, type="continuous")
+
+LfAq_disc = wes_palette("Zissou1", 5, type="discrete")
+
+IsleofDogs1 = wes_palette("IsleofDogs1")
+Darjeeling1 = wes_palette("Darjeeling1")
+Darjeeling2 = wes_palette("Darjeeling2")
+```
+
+
+#loading the required data
+```{r}
+ABA_zscore <- read.delim("/Users/benbarry/wd(r)/ABA_zscore.txt")
+data_backup <- ABA_zscore
+data <- ABA_zscore
+
+ABA_median <- read.delim("/Users/benbarry/wd(r)/ABA_median.txt")
+data_backup <- ABA_median
+ABA_median<- data_backup
+
+single_cell_marker_data<- read_excel("/Users/benbarry/wd(r)/Cell_marker_Seq.csv")
+```
+
+#Figure1
+##scatterplot of A20 and TLR4
+```{r}
+
+sp2 <- ggplot(ABA_median, aes(x = TLR4, y = TNFAIP3)) +
+geom_point(size = 1.5)+
+  theme_classic() + 
+ geom_smooth(method = "lm",
+             se = TRUE) +
+  labs(x = "TLR4 expression",
+       y = "A20 expression",
+       size = 20, face = "bold",
+       title = "A20 plotted against TLR4")  +
+  stat_cor(method = "spearman",
+           label.x = 7, label.y = 5, size = 3, face = "bold")
+
+plot(sp2)
+
+#ggsave("basic_A20TLR4_scatterplot.png", plot = sp2, width = 8, height = 4.5, path = "/Users/benbarry/Library/CloudStorage/Box-Box/PHD/Thesis/Chapter_2_ABA/figures")
+
+
+
+```
+
+#figure 2: 
+##2a, 2c, 2e. PCA for whole brain.
+
+```{r}
+##Analyzing variability among samples based on gene expression
+##PCA will identify patterns and relationships among samples
+
+median_PCA_data <- as.data.frame(row.names = ABA_median$structure_acronym, ABA_median[,4:20123])
+
+ABA_PCA = prcomp(median_PCA_data)
+fviz_eig(ABA_PCA)
+
+
+PCA.of.ABA.regions.names = fviz_pca_ind(ABA_PCA,
+             col.ind = "cos2", #Color brain regions by how well they are represented by PC's
+             gradient.cols = LfAq_cont,
+             label = "none",
+             repel = TRUE,
+             title = "PCA of gene expression")+
+  theme_classic()
+PCA.of.ABA.regions.names
+
+PCA.of.gene.variance = fviz_pca_var(ABA_PCA,
+             col.var = "contrib", #Color genes by how they contribute to the variance described by PC
+             select.var = list(contrib = 50), #present the top 50 genes
+             gradient.cols = LfAq_cont,
+             repel = TRUE,     #Avoid text overlapping
+             title = "top 50 genes which contribue to variance"
+             ) +
+  theme_classic()
+PCA.of.gene.variance
+
+PCA.biplot = fviz_pca_biplot(ABA_PCA, repel = TRUE,
+                select.var = list(contrib = 20),
+                col.var = "contrib", # Variables color
+                col.ind = "cos2",     # Color individuals by the quality of representation
+                gradient.cols = LfAq_cont,
+                label = "var",
+                title = "Biplot of top 20 contributing genes over all regions"
+                ) +
+  theme_classic()
+PCA.biplot
+
+#ggsave("PCA.biplot.png", plot = PCA.biplot, width = 8, height = 4.5, path = "/Users/benbarry/Library/CloudStorage/Box-Box/PHD/Thesis/Chapter_2_ABA/figures")
+
+#ggsave("PCA.of.gene.variance.png", plot = PCA.of.gene.variance, width = 8, height = 4.5, path = "/Users/benbarry/Library/CloudStorage/Box-Box/PHD/Thesis/Chapter_2_ABA/figures")
+  
+#ggsave("PCA.of.ABA.regions.names.png", plot = PCA.of.ABA.regions.names, width = 8, height = 4.5, path = "/Users/benbarry/Library/CloudStorage/Box-Box/PHD/Thesis/Chapter_2_ABA/figures")
+  
+
+```
+
+
+##2b, 2d, 2f. PCA of gene variability
+
+```{r}
+#PCA Analyzing variability among genes based on their expression across samples
+#PCA will identify patterns and relationships among genes
+
+t_median_PCA_data <- t(ABA_median[, 4:20123])
+colnames(t_median_PCA_data) <- ABA_median$structure_acronym                             
+head(t_median_PCA_data)
+
+t_ABA_PCA = prcomp(t_median_PCA_data)
+fviz_eig(t_ABA_PCA)
+
+PCA.of.ABA.genes = fviz_pca_ind(t_ABA_PCA,
+             col.ind = "cos2", #Color genes by how well they are represented by PC's
+             gradient.cols = LfAq_cont,
+             label = "none",
+             repel = TRUE, #Avoid text overlapping
+             title = "PCA of gene expression"
+             ) +
+  theme_classic()
+PCA.of.ABA.genes
+
+PCA.of.brain.region.variance = fviz_pca_var(t_ABA_PCA,
+             col.var = "contrib", #Color brain regions by how they contribute to the variance 
+             select.var = list(contrib = 50), #present the top 50 genes
+             gradient.cols = LfAq_cont,
+             repel = TRUE,     #Avoid text overlapping
+             title = "top 50 brain regions which contribue to variance"
+             ) +
+  theme_classic()
+PCA.of.brain.region.variance
+
+PCA.biplot.region.var = fviz_pca_biplot(t_ABA_PCA, repel = TRUE,
+                select.var = list(contrib = 20),
+                col.var = "contrib", #Color brain regions by how they contribute to the variance
+                col.ind = "cos2",      #Color genes by how well they are represented by PC's
+                gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+                label = "var",
+                title = "Biplot of top 20 contributing brain regions over all genes"
+                ) +
+  theme_classic()
+PCA.biplot.region.var
+
+#ggsave("PCA.of.ABA.genes.png", plot = PCA.of.ABA.genes, width = 8, height = 4.5, path = "/Users/benbarry/Library/CloudStorage/Box-Box/PHD/Thesis/Chapter_2_ABA/figures")
+
+#ggsave("PCA.of.brain.region.variance.png", plot = PCA.of.brain.region.variance, width = 8, height = 4.5, path = "/Users/benbarry/Library/CloudStorage/Box-Box/PHD/Thesis/Chapter_2_ABA/figures")
+  
+#ggsave("PCA.biplot.region.var.png", plot = PCA.biplot.region.var, width = 8, height = 4.5, path = "/Users/benbarry/Library/CloudStorage/Box-Box/PHD/Thesis/Chapter_2_ABA/figures")
+  
+
+```
+
+#Figure 3: 
+##3a, 3b. correlation plot
+
+```{r}
+###note: this takes approx 2-3 hours to run the correlation matrix
+
+gene_data <- ABA_median[, 4:20123]
+#unhash below when ready to run
+#correlation_matrix <- cor(gene_data, method ="spearman")
+
+# Flatten the upper triangle of the correlation matrix (the removes the inverse pairs)
+## upper_triangle <- upper.tri(correlation_matrix)
+correlation_values <- correlation_matrix[upper_triangle]
+correlation_values <- round(correlation_values, 3) #round to the nearest 3 digits
+
+
+set.seed(26)
+
+correlation_values <- as.data.frame(correlation_values)
+
+random_sample1 <- correlation_values[sample(nrow(correlation_values), size=20000000), ]
+random_sample1 <- as.data.frame(random_sample1)
+
+summary(correlation_values)
+skewness(correlation_values)
+
+
+cor_histogram <- ggplot(
+  random_sample1, 
+  aes(x=random_sample1)) +
+  geom_histogram( binwidth=0.025,
+                  fill="#78B7C5",
+                  color = "#3B9AB2",
+                  alpha=0.9) +
+  geom_vline(
+    aes(xintercept = mean(random_sample1)),
+    linetype = "dashed") +
+  theme_classic()+
+  theme(
+    axis.text.x = element_text(face = "bold"),
+    axis.text.y = element_text(face = "bold")) + 
+  xlab("spearmans correlation coefficient")
+
+cor_histogram
+
+```
+
+## 3c.unlabelled UMAP
+```{r}
+head(ABA_median, 3)
+ABA_umap_data <- ABA_median[,4:20123]
+head(ABA_umap_data, 3)
+
+
+set.seed(400)
+
+#median UMAP 
+ABA_umap <- umap(ABA_umap_data)
+head(ABA_umap$layout, 3)
+
+umap_df <- as.data.frame(ABA_umap$layout)
+colnames(umap_df) <- c("UMAP1", "UMAP2")
+
+median.umap = ggplot(umap_df, aes(x = UMAP1, y = UMAP2)) +
+  geom_point(color = "#3B9AB2") +
+  theme_classic() +
+  labs(title = "Unclustered UMAP of whole brain")
+median.umap
+#ggsave("median.umap.png", plot = median.umap, width = 8, height = 4.5, path = "/Users/benbarry/Library/CloudStorage/Box-Box/PHD/Thesis/Chapter_2_ABA/figures")
+
+
+```
+
+
+##3d.Kmneans UMAP
+
+```{r}
+
+ABA_kmeans_clusters = fviz_nbclust(ABA_umap_data, kmeans, method = "silhouette")
+ABA_kmeans_clusters
+
+ABA_kmeans = kmeans(ABA_umap_data, centers = 4)
+
+ABA_umap_data_kmeans = umap_df %>%
+  mutate(Cluster = factor(ABA_kmeans$cluster))
+
+
+Kmeans_UMAP = ggplot(ABA_umap_data_kmeans, aes(x = UMAP1, y = UMAP2, color = Cluster)) +
+  geom_point() +
+  scale_color_manual(values = Darjeeling2) +
+  theme_classic() + 
+  labs(title = "Kmeans clustering over UMAP")
+Kmeans_UMAP
+
+#ggsave("Kmeans_UMAP.png", plot = Kmeans_UMAP, width = 8, height = 4.5, path = "/Users/benbarry/Library/CloudStorage/Box-Box/PHD/Thesis/Chapter_2_ABA/figures")
+
+
+```
+
+##3e. DBSCAN UMAP
+```{r}
+KNN.plot.UMAP = dbscan::kNNdistplot(ABA_umap_data, k = 2) +
+  abline(h = 75, lty = 2)
+KNN.plot.UMAP
+# ggsave("KNN.plot.UMAP.png", plot = KNN.plot.UMAP, width = 8, height = 4.5, path = "/Users/benbarry/Library/CloudStorage/Box-Box/PHD/Thesis/Chapter_2_ABA/figures")
+
+
+ABA_DBSCAN <- dbscan(ABA_umap_data, eps = 75, minPts = 3)
+
+ABA_DBSCAN$cluster
+
+ABA_umap_data_DBSCAN = umap_df %>%
+  mutate(Cluster = factor(ABA_DBSCAN$cluster))
+
+DBSCAN_UMAP = ggplot(ABA_umap_data_DBSCAN, aes(x = UMAP1, y = UMAP2, color = Cluster)) +
+  geom_point() +
+  scale_color_manual(values = c("#3B9AB2", "#EBCC2A", "#F21A00")) +
+  theme_classic() +
+  labs(title = "DBSCAN over UMAP")
+DBSCAN_UMAP
+
+#ggsave("DBSCAN_UMAP.png", plot = DBSCAN_UMAP, width = 8, height = 4.5, path = "/Users/benbarry/Library/CloudStorage/Box-Box/PHD/Thesis/Chapter_2_ABA/figures")
+
+
+
+```
+
+##3f. HDBSCAN UMAP
+
+```{r}
+ABA_HDBSCAN <- hdbscan(ABA_umap_data,, minPts = 3)
+
+head(ABA_HDBSCAN$cluster)
+
+ABA_umap_data_HDBSCAN = umap_df %>%
+  mutate(Cluster = factor(ABA_HDBSCAN$cluster))
+
+HDBSCAN.UMAP = ggplot(ABA_umap_data_HDBSCAN, aes(x = UMAP1, y = UMAP2, color = Cluster)) +
+  geom_point() +
+  theme_classic() +
+  labs(title = "HDBSCAN over UMAP")
+HDBSCAN.UMAP
+
+#ggsave("HDBSCAN_UMAP.png", plot = HDBSCAN.UMAP, width = 8, height = 4.5, path = "/Users/benbarry/Library/CloudStorage/Box-Box/PHD/Thesis/Chapter_2_ABA/figures")
+
+```
+
+#Figure 4
+##4a. Kmeans cluster on A20 vs TLR4
+```{r}
+#setting up data
+A20_TLR4<- ABA_zscore[c("structure_id", "structure_name", "structure_acronym", "TLR4", "TNFAIP3")]
+
+A20_TLR4c <- A20_TLR4[c("structure_acronym","TLR4", "TNFAIP3")]
+
+rownames(A20_TLR4c) <- A20_TLR4c$structure_acronym
+A20_TLR4c$structure_acronym <- NULL
+
+A20_TLR4_kmeans_clusters = fviz_nbclust(A20_TLR4c , kmeans, method = "silhouette")
+A20_TLR4_kmeans_clusters
+
+A20_TLR4_kmeans = kmeans(A20_TLR4c, centers = 2)
+
+A20_TLR4_data_kmeans = A20_TLR4c %>%
+  mutate(Cluster = factor(A20_TLR4_kmeans$cluster))
+
+
+Kmeans_A20_TLR4 = ggplot(A20_TLR4_data_kmeans, aes(x = TLR4, y = TNFAIP3, color = Cluster)) +
+  geom_point() +
+  scale_color_manual(values = Darjeeling2) +
+  theme_classic() + 
+  labs(title = "Kmeans of A20 and TLR4 coexpression")
+Kmeans_A20_TLR4
+#ggsave("A20TLR4kmeans.png", plot = Kmeans_A20_TLR4, width = 8, height = 4.5, path = "/Users/benbarry/Library/CloudStorage/Box-Box/PHD/Thesis/Chapter_2_ABA/figures")
+```
+
+##4b.  kmeans thresholding 
+
+```{r}
+#determin A20 thresholding
+#visualise the data
+hist(ABA_median$TNFAIP3,breaks=20)
+#Cumulative distribution
+plot(ecdf(ABA_median$TNFAIP3))
+#Scatter plot
+ggplot(data = ABA_median, aes(x=1,y=TNFAIP3))+
+  geom_beeswarm()
+#Violin
+ggplot(data = ABA_median, aes(x=1,y=TNFAIP3))+
+  geom_violin()
+
+
+#plot the data
+kmdataA20 <- as.data.frame(ABA_median$TNFAIP3)
+rownames(kmdataA20) <- ABA_median$structure_id
+
+
+fviz_nbclust(kmdataA20, kmeans, method = "silhouette")
+
+
+k2 <- kmeans(kmdataA20, centers = 2) #2 clusters
+k2clust = kmdataA20 %>%
+  mutate(Cluster = k2$cluster) #Output the cluster allocations
+k2clust$structure_id <- ABA_median$structure_id
+k2clust <- k2clust %>% 
+  arrange(ABA_median$TNFAIP3)
+ABA_medianA20 <- merge(ABA_median,k2clust[,2:3]) %>% 
+  mutate(Cluster = as.factor(Cluster))
+
+ggplot(data=ABA_medianA20, aes(x=1,y=TNFAIP3,colour=Cluster))+
+  geom_beeswarm()
+
+#determin TLR4 thresholding
+
+#visualise the data
+hist(ABA_median$TLR4,breaks=20)
+
+#Cumulative distribution
+plot(ecdf(ABA_median$TLR4))
+
+#Scatter plot
+ggplot(data = ABA_median, aes(x=1,y=TLR4))+
+  geom_beeswarm()
+
+#Violin
+ggplot(data = ABA_median, aes(x=1,y=TLR4))+
+  geom_violin()
+
+kmdataTLR4 <- as.data.frame(ABA_median$TLR4)
+rownames(kmdataTLR4) <- ABA_median$structure_id
+fviz_nbclust(kmdataTLR4, kmeans, method = "wss",k.max = 50) 
+
+fviz_nbclust(kmdataTLR4, kmeans, method = "silhouette")
+
+
+k2 <- kmeans(kmdataTLR4, centers = 3) #2 clusters
+k2clust = kmdataTLR4 %>%
+  mutate(Cluster = k2$cluster) #Output the cluster allocations
+
+k2clust$structure_id <- ABA_median$structure_id
+k2clust <- k2clust %>% 
+  arrange(ABA_median$TLR4)
+ABA_medianTLR4 <- merge(ABA_median,k2clust[,2:3]) %>% 
+  mutate(Cluster = as.factor(Cluster))
+ggplot(data=ABA_medianTLR4, aes(x=1,y=TLR4,colour=Cluster))+
+  geom_beeswarm()
+
+
+#plot the data
+A20TLR4data <- ABA_median[c("structure_acronym", "structure_name", "TLR4", "TNFAIP3")]
+rownames(A20TLR4data) <- A20TLR4data$structure_acronym
+A20TLR4data$structure_acronym <- NULL
+
+# Create the scatter plot
+
+sp <- ggplot(A20TLR4data, aes(x = TLR4, y = TNFAIP3)) +
+  geom_text(aes(label = ifelse(TLR4 > 7 | TNFAIP3 > 3, rownames(A20TLR4data), "")),
+            hjust = -0.21, vjust = -0.19) +
+  geom_point(aes(color = ifelse((TLR4 > 7 | TNFAIP3 > 3) & (TLR4 > 6.5 & TNFAIP3 > 2.5), "olivedrab4",
+                                ifelse((TLR4 > 7 | TNFAIP3 > 3) & (TLR4 > 6.5), "deepskyblue3",
+                                       ifelse((TLR4 > 7 | TNFAIP3 > 3) & (TNFAIP3 > 2.5), "pink", "black"))))) +
+  labs(x = "TLR4 expression", 
+       y = "A20 expression", 
+       title = "Kmeans Thresholding",
+       size = 20, 
+       face = "bold") +
+  scale_color_manual(values = c("black", "#3B9AB2", "#E1AF00", "#F21A00"),
+                     labels = c("below threshold", 
+                                "TLR4 high", 
+                                "A20 high - TLR4 high", 
+                                "A20 high"),
+                     name = "") +
+  theme_classic() + 
+  geom_smooth(method = "lm", se = TRUE) +
+  stat_cor(method = "spearman", label.x = 7, label.y = 5, size = 3, face = "bold")
+
+sp
+
+
+
+#ggsave("Kmeans threasholding_A20TLR4_scatterplot.png", plot = sp, width = 8, height = 4.5, path = "/Users/benbarry/Library/CloudStorage/Box-Box/PHD/Thesis/Chapter_2_ABA/figures")
+
+
+```
+##4c. A20 vs TLR4 dbscan
+```{r}
+#setting up a data table 
+
+A20_TLR4<- ABA_zscore[c("structure_id", "structure_name", "structure_acronym", "TLR4", "TNFAIP3")]
+
+A20_TLR4c <- A20_TLR4[c("structure_acronym","TLR4", "TNFAIP3")]
+
+rownames(A20_TLR4c) <- A20_TLR4c$structure_acronym
+A20_TLR4c$structure_acronym <- NULL
+
+#to search for region names:
+ABA_ids <- ABA_zscore[c("structure_id", "structure_name","structure_acronym")]
+
+# K-Nearest Neighbors distance plot
+dbscan::kNNdistplot(A20_TLR4c, k = 2)
+abline(h = 0.5, lty = 2)
+
+# Apply DBSCAN clustering
+dbs_A20_TLR4 <- dbscan(A20_TLR4c, eps = 0.5, minPts = 3)
+
+# Visualize DBSCAN clustering results
+A20_TLR4_DBS <- fviz_cluster(dbs_A20_TLR4, 
+                             data = A20_TLR4c,
+                             ellipse.type = "convex",
+                             palette = LfAq_disc,
+                             fill = "grey",
+                             ggtheme = theme_classic(),
+                             geom = c("point", "text"),
+                             show.clust.cent = FALSE,
+                             repel = FALSE,
+                             xlim = c(-4, 3),
+                             ylim = c(-5, 5),
+                             xticks.by = 2,
+                             yticks.by = 1,
+                             pointsize = 2,
+                             labelsize = 0,
+                             outlier.labelsize = 10.0,
+                             outlier.pointsize = 2,
+                             outlier.color = "black",
+                             ellipse.alpha = 0.2,
+                             cor.coef = FALSE,
+                             cor.method = "spearman",
+                             cor.coef.coord = c(-4, 4),
+                             conf.int = FALSE,
+                             font.x = 15,
+                             font.y = 15,
+                             font.tickslab = c(12, "bold", "black"),
+                             ellipse.border.remove = FALSE,
+                             add = c("none"),
+                             add.params = list(color = "red"),
+                             xlab = "TLR4 Expression (Z-score)",
+                             ylab = "A20 Expression (Z-score)",
+                             main = "")
+
+# Adjust axis breaks and title
+A20_TLR4_DBS = A20_TLR4_DBS +
+  scale_x_continuous(breaks = seq(-4, 3, by = 1)) +
+  scale_y_continuous(breaks = seq(-5, 5, by = 1)) +
+  labs(title = "DBSCAN of TLR4 and A20 Expression")
+
+# Extract points from cluster 1
+cluster1_points_A20TLR4 <- A20_TLR4c[dbs_A20_TLR4$cluster == 1, ]
+
+# Add smoothing line and correlation statistics for cluster 1
+A20_TLR4_DBS = A20_TLR4_DBS +
+  geom_smooth(data = cluster1_points_A20TLR4, 
+              aes(x = TLR4, y = TNFAIP3),
+              method = "lm",
+              se = TRUE,
+              color = "red",
+              size = 0.5) +
+  stat_cor(data = cluster1_points_A20TLR4, 
+           aes(x = TLR4, y = TNFAIP3), 
+           method = "spearman", 
+           label.x = -4, 
+           label.y = 4, 
+           size = 4)
+
+A20_TLR4_DBS
+
+```
+
+##4d. orexin DBSCAN
+```{r}
+#Setup data
+
+HCRT<- ABA_zscore[c("structure_id", "structure_name", "structure_acronym", "HCRTR1", "HCRT")]
+
+HCRTc <- HCRT[c("structure_acronym","HCRTR1", "HCRT")]
+
+rownames(HCRTc) <- HCRTc$structure_acronym
+HCRTc$structure_acronym <- NULL
+
+# K-Nearest Neighbors distance plot
+dbscan::kNNdistplot(HCRTc, k = 2)
+abline(h = 0.4, lty = 2)
+
+# Apply DBSCAN clustering
+dbs_HCRT <- dbscan(HCRTc, eps = 0.4, minPts = 3)
+
+
+# Visualize DBSCAN clustering results
+HCRT_DBS <- fviz_cluster(dbs_HCRT, 
+                         data = HCRTc,
+                         ellipse.type = "convex",
+                         palette = LfAq_disc,
+                         fill = "grey",
+                         ggtheme = theme_classic(),
+                         geom = c("point", "text"),
+                         show.clust.cent = FALSE,
+                         repel = FALSE,
+                         xlim = c(-3, 7),
+                         ylim = c(-3, 7),
+                         xticks.by = 2,
+                         yticks.by = 1,
+                         pointsize = 2,
+                         labelsize = 0,
+                         outlier.labelsize = 10.0,
+                         outlier.pointsize = 2,
+                         outlier.color = "black",
+                         ellipse.alpha = 0.2,
+                         cor.coef = FALSE,
+                         cor.coef.coord = c(3, 3),
+                         conf.int = FALSE,
+                         font.x = 15,
+                         font.y = 15,
+                         font.tickslab = c(12, "bold", "black"),
+                         ellipse.border.remove = FALSE,
+                         add = c("none"),
+                         add.params = list(color = "red"),
+                         xlab = "Orexin receptor 1 Expression (Z-score)",
+                         ylab = "Orexin Expression (Z-score)",
+                         main = "DBSCAN of Orexin and Orexin Receptor 1")
+
+# Extract points from cluster 1
+cluster1_pointsHCRT <- HCRTc[dbs_HCRT$cluster == 1, ]
+
+# Add smoothing line and correlation statistics for cluster 1
+HCRT_DBS_with_cor_line <- HCRT_DBS +
+  geom_smooth(data = cluster1_pointsHCRT, 
+              aes(x = HCRTR1, y = HCRT), 
+              method = "lm", 
+              se = TRUE, 
+              color = "red", 
+              size = 0.5) +
+  stat_cor(data = cluster1_pointsHCRT, 
+           aes(x = HCRTR1, y = HCRT), 
+           method = "spearman", 
+           label.x = -2.5, 
+           label.y = -2, 
+           size = 3)
+
+# Final plot with correlation line
+HCRT_DBS_with_cor_line
+
+
+```
+
+#Figure 5
+## 5a, 5b A20 vs TRAF6
+```{r}
+#load data
+A20TRAF6data <- ABA_median[c("structure_acronym", "structure_name", "TRAF6", "TNFAIP3")]
+rownames(A20TRAF6data) <- A20TLR4data$structure_acronym
+A20TLR4data$structure_acronym <- NULL
+
+#create scatterplot
+A20TRAF6_SP = ggplot(A20TRAF6data, aes(x = TRAF6, y = TNFAIP3)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE) +
+  labs(x = "TRAF6 expression (median)", y = "A20 expression (median)", size = 28) +
+  stat_cor(method = "spearman", label.x = 5, label.y = 4, size = 3, face = "bold") +
+  ggtitle("") +
+  theme_classic()
+
+A20TRAF6_SP
+
+#dbscan plot
+
+A20_TRAF6<- ABA_zscore[c("structure_id", "structure_name", "structure_acronym", "TRAF6", "TNFAIP3")]
+
+A20_TRAF6c <- A20_TRAF6[c("structure_acronym","TRAF6", "TNFAIP3")]
+
+rownames(A20_TRAF6c) <- A20_TRAF6c$structure_acronym
+A20_TRAF6c$structure_acronym <- NULL
+
+
+#KNN dist plot 
+dbscan::kNNdistplot(A20_TRAF6c, k =2)
+abline(h = 0.8, lty = 2)
+
+dbs_A20_TRAF6 <- dbscan(A20_TRAF6c, eps = 0.8, minPts = 3)
+
+# Visualize
+A20_TRAF6_DBS = fviz_cluster(dbs_A20_TRAF6, data = A20_TRAF6c,
+                           ellipse.type = "convex",
+                           palette = LfAq_disc,
+                           fill = "grey",
+                           ggtheme = theme_classic(),
+                           geom = c("point", "text"),
+                           show.clust.cent = FALSE,
+                           repel = FALSE,
+                           xlim = c(-5, 7),
+                           ylim = c(-5, 5),
+                           xticks.by = 2,
+                           yticks.by = 1,
+                           pointsize = 2,
+                           labelsize = 0,
+                           outlier.labelsize = 10.0,
+                           outlier.pointsize = 2,
+                           outlier.color = "black",
+                           ellipse.alpha = 0.2,
+                           cor.coef = TRUE,
+                           cor.method = "spearman",
+                           cor.coef.coord = c(-5, 4),
+                           conf.int = TRUE,
+                           font.x = 15,
+                           font.y = 15,
+                           font.tickslab = c(12, "bold", "black"),
+                           ellipse.border.remove = FALSE,
+                           add = c("reg.line"),
+                           add.params = list(color = "red"),
+                           xlab = "TRAF6 Expression (Z-score)",
+                           ylab = "A20 Expression (Z-score)",
+                           main = " ")
+                           
+A20_TRAF6_DBS
+
+
+```
+
+##5c, 4d A20 vs RIP1
+```{r}
+# Scatter plot: RIPK1 vs TNFAIP3 (A20)
+A20RIP1data <- ABA_median[c("structure_acronym", "structure_name", "RIPK1", "TNFAIP3")]
+rownames(A20RIP1data) <- A20RIP1data$structure_acronym
+A20RIP1data$structure_acronym <- NULL
+
+# Scatter plot with linear regression and Spearman correlation
+A20RIP1_SP <- ggplot(A20RIP1data, aes(x = RIPK1, y = TNFAIP3)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE) +
+  stat_cor(method = "spearman", label.x = 5, label.y = 4, size = 3, face = "bold") +
+  labs(x = "RIP1 expression (median)", y = "A20 expression (median)", size = 28) +
+  theme_classic()
+
+# Display the scatter plot
+A20RIP1_SP
+
+# DBSCAN clustering on RIPK1 and TNFAIP3
+
+# Prepare dataset for DBSCAN
+A20_RIP1 <- ABA_zscore[c("structure_id", "structure_name", "structure_acronym", "RIPK1", "TNFAIP3")]
+A20_RIP1c <- A20_RIP1[c("structure_acronym", "RIPK1", "TNFAIP3")]
+rownames(A20_RIP1c) <- A20_RIP1c$structure_acronym
+A20_RIP1c$structure_acronym <- NULL
+
+# K-Nearest Neighbors distance plot for determining epsilon value
+dbscan::kNNdistplot(A20_RIP1c, k = 2)
+abline(h = 0.7, lty = 2)
+
+# Apply DBSCAN clustering
+dbs_A20_RIP1 <- dbscan(A20_RIP1c, eps = 0.7, minPts = 3)
+
+# Visualize DBSCAN clustering results
+library(factoextra)
+library(ggrepel)
+
+A20_RIP1_DBS <- fviz_cluster(dbs_A20_RIP1, 
+                             data = A20_RIP1c,
+                             ellipse.type = "convex",
+                             palette = LfAq_disc,
+                             fill = "grey",
+                             ggtheme = theme_classic(),
+                             geom = c("point", "text"),
+                             show.clust.cent = FALSE,
+                             repel = FALSE,
+                             xlim = c(-5, 7),
+                             ylim = c(-5, 5),
+                             xticks.by = 2,
+                             yticks.by = 1,
+                             pointsize = 2,
+                             labelsize = 0,
+                             outlier.labelsize = 10.0,
+                             outlier.pointsize = 2,
+                             outlier.color = "black",
+                             ellipse.alpha = 0.2,
+                             cor.coef = TRUE,
+                             method = "spearman",
+                             cor.coef.coord = c(-5, 4),
+                             conf.int = TRUE,
+                             font.x = 15,
+                             font.y = 15,
+                             font.tickslab = c(12, "bold", "black"),
+                             ellipse.border.remove = FALSE,
+                             add = c("reg.line"),
+                             add.params = list(color = "red"),
+                             xlab = "RIP1 Expression (Z-score)",
+                             ylab = "A20 Expression (Z-score)",
+                             main = " ")
+
+# Display the DBSCAN clustering plot
+A20_RIP1_DBS
+
+```
+
+##5e, 5f. TRAF6 VS RIP1
+```{r}
+#load data for scatterplot
+TRAF6RIPK1data <- ABA_median[c("structure_acronym", "structure_name", "RIPK1", "TRAF6")]
+rownames(TRAF6RIPK1data) <- TRAF6RIPK1data$structure_acronym
+TRAF6RIPK1data$structure_acronym <- NULL
+
+# Create the scatter plot with regression line
+TRAF6RIPK1_sp = ggplot(TRAF6RIPK1data, aes(x =RIPK1, y = TRAF6)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE) +
+  
+stat_cor(method = "spearman", label.x = 5, label.y = 6.5, size = 3, face = "bold") + 
+  
+  labs(x = "RIP1 expression (median)", y = "TRAF6 expression (median)") +
+  ggtitle("") +
+    theme_classic()
+TRAF6RIPK1_sp
+
+#Load data for DBSCAN
+
+TRAF6_RIPK1<- ABA_zscore[c("structure_id", "structure_name", "structure_acronym", "RIPK1", "TRAF6")]
+TRAF6_RIPK1c <- TRAF6_RIPK1[c("structure_acronym","RIPK1", "TRAF6")]
+
+rownames(TRAF6_RIPK1c) <- TRAF6_RIPK1c$structure_acronym
+TRAF6_RIPK1c$structure_acronym <- NULL
+
+# KNN distance plot for TRAF6 and RIPK1
+dbscan::kNNdistplot(TRAF6_RIPK1c, k = 3)
+abline(h = 0.6, lty = 2)
+
+# DBSCAN clustering on TRAF6 and RIPK1
+dbs_TRAF6_RIPK1 <- dbscan(TRAF6_RIPK1c, eps = 0.6, minPts = 3)
+
+
+TRAF6_RIPK1_DBS <- fviz_cluster(dbs_TRAF6_RIPK1, 
+                                data = TRAF6_RIPK1c,
+                                ellipse.type = "convex",
+                                palette = LfAq_disc,
+                                fill = "grey",
+                                ggtheme = theme_classic(),
+                                geom = c("point", "text"),
+                                show.clust.cent = FALSE,
+                                repel = FALSE,
+                                xlim = c(-5, 5),
+                                ylim = c(-5, 5),
+                                xticks.by = 2,
+                                yticks.by = 1,
+                                pointsize = 2,
+                                labelsize = 0,
+                                outlier.labelsize = 10.0,
+                                outlier.pointsize = 2,
+                                outlier.color = "black",
+                                ellipse.alpha = 0.2,
+                                cor.coef = FALSE,
+                                font.x = 15,
+                                font.y = 15,
+                                font.tickslab = c(12, "bold", "black"),
+                                ellipse.border.remove = FALSE,
+                                add = "none",
+                                add.params = list(color = "red"),
+                                xlab = "RIP1 Expression (Z-score)",
+                                ylab = "TRAF6 Expression (Z-score)",
+                                main = " ")
+
+# Display the DBSCAN clustering plot
+TRAF6_RIPK1_DBS
+
+# Extract points belonging to cluster 1
+cluster1_pointsTRAF6_RIPK1 <- TRAF6_RIPK1c[dbs_TRAF6_RIPK1$cluster == 1, ]
+
+# Add linear regression line and Spearman correlation to the plot
+TRAF6_RIPK1_DBS_with_cor_line <- TRAF6_RIPK1_DBS +
+  geom_smooth(data = cluster1_pointsTRAF6_RIPK1, 
+              aes(x = RIPK1, y = TRAF6), 
+              method = "lm", 
+              se = TRUE, 
+              color = "red", 
+              size = 0.5) +
+  stat_cor(data = cluster1_pointsTRAF6_RIPK1, 
+           aes(x = RIPK1, y = TRAF6), 
+           method = "spearman", 
+           label.x = -5, 
+           label.y = 4, 
+           size = 3, 
+           face = "bold")
+
+# Display the final plot with the correlation line
+TRAF6_RIPK1_DBS_with_cor_line
+
+```
+
+#Figure 6
+##6a, 6b.TLR4 vs MyD88
+```{r}
+#Load data for Scatter plot
+myd88TLR4data <- ABA_median[c("structure_acronym", "structure_name", "TLR4", "MYD88")]
+rownames(myd88TLR4data) <- myd88TLR4data$structure_acronym
+myd88TLR4data$structure_acronym <- NULL
+
+# Create the scatter plot with regression line
+myd88TLR4 = ggplot(myd88TLR4data, aes(x =TLR4, y = MYD88)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE) +
+   stat_cor(method = "spearman", label.x = 4, label.y = 3, size = 3, face = "bold") +
+  labs(x = "TLR4 expression (median)", y = "MYD88 expression (median)") +
+  ggtitle("") +
+    theme_classic()
+myd88TLR4
+
+
+
+# Subset MYD88 and TLR4 data for DBSCAN
+MYD88_TLR4 <- ABA_zscore[c("structure_id", "structure_name", "structure_acronym", "TLR4", "MYD88")]
+
+# Select relevant columns and set rownames to structure_acronym
+MYD88_TLR4c <- MYD88_TLR4[c("structure_acronym", "TLR4", "MYD88")]
+rownames(MYD88_TLR4c) <- MYD88_TLR4c$structure_acronym
+MYD88_TLR4c$structure_acronym <- NULL
+
+# KNN distance plot for MYD88 and TLR4
+dbscan::kNNdistplot(MYD88_TLR4c, k = 3)
+abline(h = 0.5, lty = 2)
+
+# DBSCAN clustering
+dbs_MYD88_TLR4 <- dbscan(MYD88_TLR4c, eps = 0.5, minPts = 3)
+
+# Visualize DBSCAN clustering results
+MYD88_TLR4_DBS <- fviz_cluster(dbs_MYD88_TLR4, 
+                               data = MYD88_TLR4c,
+                               ellipse.type = "convex",
+                               palette = LfAq_disc,
+                               fill = "grey",
+                               ggtheme = theme_classic(),
+                               geom = c("point", "text"),
+                               show.clust.cent = FALSE,
+                               repel = FALSE,
+                               xlim = c(-5, 5),
+                               ylim = c(-5, 5),
+                               xticks.by = 2,
+                               yticks.by = 1,
+                               pointsize = 2,
+                               labelsize = 0,
+                               outlier.labelsize = 10.0,
+                               outlier.pointsize = 2,
+                               outlier.color = "black",
+                               ellipse.alpha = 0.2,
+                               cor.coef = FALSE,
+                               font.x = 15,
+                               font.y = 15,
+                               font.tickslab = c(12, "bold", "black"),
+                               ellipse.border.remove = FALSE,
+                               add = "none",
+                               add.params = list(color = "red"),
+                               xlab = "TLR4 Expression (Z-score)",
+                               ylab = "MYD88 Expression (Z-score)",
+                               main = " ")
+
+# Display DBSCAN clustering plot
+MYD88_TLR4_DBS
+
+# Extract points belonging to cluster 1
+cluster1_points_MYD88_TLR4 <- MYD88_TLR4c[dbs_MYD88_TLR4$cluster == 1, ]
+
+# Add linear regression line and Spearman correlation to the plot
+MYD88_TLR4_DBS_with_cor_line <- MYD88_TLR4_DBS +
+  geom_smooth(data = cluster1_points_MYD88_TLR4, 
+              aes(x = TLR4, y = MYD88), 
+              method = "lm", 
+              se = TRUE, 
+              color = "red", 
+              size = 0.5) +
+  stat_cor(data = cluster1_points_MYD88_TLR4, 
+           aes(x = TLR4, y = MYD88), 
+           method = "spearman", 
+           label.x = -4, 
+           label.y = -3, 
+           size = 3, 
+           face = "bold")
+
+# Display final plot with the correlation line
+MYD88_TLR4_DBS_with_cor_line
+
+
+
+```
+
+##6d, 6d TRIF VS TLR4
+```{r}
+
+TICAM1TLR4data <- ABA_median[c("structure_acronym", "structure_name", "TLR4", "TICAM1")]
+rownames(TICAM1TLR4data) <- TICAM1TLR4data$structure_acronym
+TICAM1TLR4data$structure_acronym <- NULL
+
+# Create the scatter plot with regression line
+TICAM1TLR4_sp = ggplot(TICAM1TLR4data, aes(x =TLR4, y = TICAM1)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE) +
+  stat_cor(method = "spearman", label.x = 6.5, label.y = 5.25, size = 3, face = "bold") +
+  labs(x = "TLR4 expression (median)", y = "TRIF expression (median)") +
+  ggtitle("") +
+    theme_classic()
+TICAM1TLR4_sp
+
+
+#dbscan
+# Subset TICAM1 (TRIF) and TLR4 data
+TICAM1_TLR4 <- ABA_zscore[c("structure_id", "structure_name", "structure_acronym", "TLR4", "TICAM1")]
+
+# Select relevant columns and set rownames to structure_acronym
+TICAM1_TLR4c <- TICAM1_TLR4[c("structure_acronym", "TLR4", "TICAM1")]
+rownames(TICAM1_TLR4c) <- TICAM1_TLR4c$structure_acronym
+TICAM1_TLR4c$structure_acronym <- NULL
+
+# Optional: Search for region names if needed
+ABA_ids <- ABA_zscore[c("structure_id", "structure_name", "structure_acronym")]
+
+# KNN distance plot for TLR4 and TICAM1
+dbscan::kNNdistplot(TICAM1_TLR4c, k = 2)
+abline(h = 0.4, lty = 2)
+
+# DBSCAN clustering
+dbs_TICAM1_TLR4 <- dbscan(TICAM1_TLR4c, eps = 0.4, minPts = 3)
+
+# Visualize DBSCAN clustering results
+TICAM1_TLR4_DBS <- fviz_cluster(dbs_TICAM1_TLR4, 
+                                 data = TICAM1_TLR4c,
+                                 ellipse.type = "convex",
+                                 palette = LfAq_disc,
+                                 fill = "grey",
+                                 ggtheme = theme_classic(),
+                                 geom = c("point", "text"),
+                                 show.clust.cent = FALSE,
+                                 repel = FALSE,
+                                 xlim = c(-5, 5),
+                                 ylim = c(-5, 5),
+                                 xticks.by = 2,
+                                 yticks.by = 1,
+                                 pointsize = 2,
+                                 labelsize = 0,
+                                 outlier.labelsize = 10.0,
+                                 outlier.pointsize = 2,
+                                 outlier.color = "black",
+                                 ellipse.alpha = 0.2,
+                                 cor.coef = FALSE,
+                                 font.x = 15,
+                                 font.y = 15,
+                                 font.tickslab = c(12, "bold", "black"),
+                                 ellipse.border.remove = FALSE,
+                                 add = "none",
+                                 xlab = "TLR4 Expression (Z-score)",
+                                 ylab = "TRIF Expression (Z-score)",
+                                 main = " ")
+
+# Display DBSCAN clustering plot
+TICAM1_TLR4_DBS
+
+# Extract and print cluster labels for clusters 2, 3, and 4
+cluster2_points <- TICAM1_TLR4c[dbs_TICAM1_TLR4$cluster == 2, ]
+cluster2_labels <- rownames(cluster2_points)
+print(cluster2_labels)
+
+cluster3_points <- TICAM1_TLR4c[dbs_TICAM1_TLR4$cluster == 3, ]
+cluster3_labels <- rownames(cluster3_points)
+print(cluster3_labels)
+
+cluster4_points <- TICAM1_TLR4c[dbs_TICAM1_TLR4$cluster == 4, ]
+cluster4_labels <- rownames(cluster4_points)
+print(cluster4_labels)
+
+# Extract the data points belonging to cluster 1
+cluster1_points_TICAM1TLR4 <- TICAM1_TLR4c[dbs_TICAM1_TLR4$cluster == 1, ]
+
+# Add correlation line for cluster 1 to the plot (using geom_smooth)
+TICAM1_TLR4_DBS_with_cor_line <- TICAM1_TLR4_DBS +
+  geom_smooth(data = cluster1_points_TICAM1TLR4, aes(x = TLR4, y = TICAM1), method = "lm", 
+              se = TRUE, color = "red", size = 0.5) +
+  stat_cor(data = cluster1_points_TICAM1TLR4, aes(x = TLR4, y = TICAM1), method = "spearman", 
+           label.x = 2.5, label.y = 4, size = 3, face = "bold")
+
+# Display the final plot with correlation line
+TICAM1_TLR4_DBS_with_cor_line
+
+```
+
+
+##6e, 6f. MyD88 vs TRIF
+```{r}
+#scatter plot 
+
+TICAM1MYD88data <- ABA_median[c("structure_acronym", "structure_name", "MYD88", "TICAM1")]
+rownames(TICAM1MYD88data) <- TICAM1MYD88data$structure_acronym
+TICAM1MYD88data$structure_acronym <- NULL
+
+TICAM1MYD88_SP = ggplot(TICAM1MYD88data, aes(x =MYD88, y = TICAM1)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE) +
+  stat_cor(method = "spearman", label.x = 2.5, label.y = 5.5, size = 3, face = "bold") +
+  labs(x = "MYD88 expression (median)", y = "TRIF expression (median)") +
+  ggtitle("") +
+    theme_classic()
+TICAM1MYD88_SP
+
+#dbscan
+# Subset TICAM1 (TRIF) and MYD88 data
+TICAM1_MYD88 <- ABA_zscore[c("structure_id", "structure_name", "structure_acronym", "MYD88", "TICAM1")]
+
+# Select relevant columns and set rownames to structure_acronym
+TICAM1_MYD88c <- TICAM1_MYD88[c("structure_acronym", "MYD88", "TICAM1")]
+rownames(TICAM1_MYD88c) <- TICAM1_MYD88c$structure_acronym
+TICAM1_MYD88c$structure_acronym <- NULL
+
+# KNN distance plot for TICAM1 (TRIF) and MYD88
+dbscan::kNNdistplot(TICAM1_MYD88c, k = 2)
+abline(h = 0.3, lty = 2)
+
+# DBSCAN clustering
+dbs_TICAM1_MYD88 <- dbscan(TICAM1_MYD88c, eps = 0.3, minPts = 3)
+
+# Visualize DBSCAN clustering results
+TICAM1_MYD88_DBS <- fviz_cluster(dbs_TICAM1_MYD88, 
+                                 data = TICAM1_MYD88c,
+                                 ellipse.type = "convex",
+                                 palette = LfAq_disc,
+                                 fill = "grey",
+                                 ggtheme = theme_classic(),
+                                 geom = c("point", "text"),
+                                 show.clust.cent = FALSE,
+                                 repel = FALSE,
+                                 xlim = c(-5, 5),
+                                 ylim = c(-5, 5),
+                                 xticks.by = 2,
+                                 yticks.by = 1,
+                                 pointsize = 2,
+                                 labelsize = 0,
+                                 outlier.labelsize = 10.0,
+                                 outlier.pointsize = 2,
+                                 outlier.color = "black",
+                                 ellipse.alpha = 0.2,
+                                 cor.coef = FALSE,
+                                 font.x = 15,
+                                 font.y = 15,
+                                 font.tickslab = c(12, "bold", "black"),
+                                 ellipse.border.remove = FALSE,
+                                 add = "none",
+                                 xlab = "MYD88 Expression (Z-score)",
+                                 ylab = "TRIF Expression (Z-score)",
+                                 main = " ")
+
+
+# Add correlation line for cluster 1 to the plot (using geom_smooth)
+cluster1_points_TICAM1_MYD88 <- TICAM1_MYD88c[dbs_TICAM1_MYD88$cluster == 1, ]
+TICAM1_MYD88_DBS_with_cor_line <- TICAM1_MYD88_DBS +
+  geom_smooth(data = cluster1_points_TICAM1_MYD88, aes(x = MYD88, y = TICAM1), method = "lm", 
+              se = TRUE, color = "red", size = 0.5) +
+  stat_cor(data = cluster1_points_TICAM1_MYD88, aes(x = MYD88, y = TICAM1), method = "spearman", 
+           label.x = -5, label.y = -4, size = 3, face = "bold")
+
+# Display final plot with correlation line
+TICAM1_MYD88_DBS_with_cor_line
+
+
+```
+
+#Figure 7
+##7a, 7b. correlations of A20 and tlr4
+```{r}
+# Select A20 and all other genes from the ABA_zscore dataset
+gene_data <- ABA_zscore[, 4:20123]
+
+A20_correlations.test <- sapply(gene_data, function(gene_column) { cor_test_result <- cor.test(gene_data$TNFAIP3, gene_column, method = "spearman")
+  cor_test_result$p.value
+})
+
+A20_correlations<- sapply(gene_data, function(gene_column) {
+  cor(gene_data$TNFAIP3, gene_column, method = "spearman")
+})
+
+A20_correlation_df <- data.frame(Gene = names(A20_correlations), Correlation = A20_correlations, P_value = A20_correlations.test, row.names = NULL)
+
+A20_correlation_df$p.adjust <- p.adjust(A20_correlation_df$P_value)
+
+A20_cor = ggplot(A20_correlation_df, 
+       aes(x = Correlation)) +
+  geom_histogram( binwidth=0.025,
+                  fill="#78B7C5",
+                  color = "#3B9AB2",
+                  alpha=0.9) +
+  theme_classic() +
+  labs(x = "Spearman Correlation Coefficient",
+       y = "Count",
+       title = "Distribution of Correlations with A20")
+A20_cor
+
+##TLR4
+
+TLR4_correlations.test <- sapply(gene_data, function(gene_column) { cor_test_result <- cor.test(gene_data$TLR4, gene_column, method = "spearman")
+  cor_test_result$p.value
+})
+TLR4_correlations<- sapply(gene_data, function(gene_column) {
+  cor(gene_data$TLR4, gene_column, method = "spearman")
+})
+
+TLR4_correlation_df <- data.frame(Gene = names(TLR4_correlations), Correlation = TLR4_correlations, P_value = TLR4_correlations.test, row.names = NULL)
+
+TLR4_correlation_df$p.adjust <- p.adjust(TLR4_correlation_df$P_value)
+
+
+TLR4_cor = ggplot(TLR4_correlation_df,
+       aes(x = Correlation)) +
+  geom_histogram( binwidth=0.025,
+                  fill="#78B7C5",
+                  color = "#3B9AB2",
+                  alpha=0.9) +
+  labs(x = "Spearman Correlation Coefficient",
+       y = "Count",
+       title = "Distribution of Correlations with TLR4") +
+  theme_classic()
+TLR4_cor
+
+```
+##7c, 7d. GSEA signle cell marker
+```{r}
+
+single_cells_brain <- single_cell_marker_data %>%
+    dplyr::filter(tissue_class == "Brain") %>%
+    dplyr::select(cell_name, Symbol) %>%
+    dplyr::mutate(Symbol = strsplit(Symbol, ', ')) %>%
+    tidyr::unnest()
+
+
+#TLR4 GSEA on single cell marker dataset from the brain.
+TLR4sc_br <- GSEA(geneListTLR4,
+                  TERM2GENE = single_cells_brain,
+                  pvalueCutoff = 0.025,
+                  minGSSize=20,
+                  scoreType="std",
+                  eps=0)
+head(TLR4sc_br)
+
+
+TLR4sc_plot <- dotplot(
+  TLR4sc_br, 
+  showCategory = 10,
+  split = ".sign") + 
+  scale_color_gradientn(colours = LfAq_cont) +
+  facet_grid(.~.sign) + 
+  ggtitle("Who expresses TLR4 in the brain?") +
+  theme_classic() 
+  
+TLR4sc_plot
+
+A20sc_br <- GSEA(geneListA20,
+              TERM2GENE = single_cells_brain,
+              pvalueCutoff = 0.025,
+              minGSSize=20,
+              scoreType="std",
+              eps=0)
+head(A20sc_br)
+
+
+#TLR4 GSEA on single cell marker dataset from the brain.
+A20sc_plot <- dotplot(
+  A20sc_br, 
+  showCategory = 10,
+  split = ".sign") + 
+  scale_color_gradientn(colours = LfAq_cont) +
+  facet_grid(.~.sign) + 
+  ggtitle("Who expresses A20 in the brain?") +
+  theme_classic() 
+  
+A20sc_plot
+```
+
+##7e. Plotting Enrichment scores for A20 and TLR4 across the brain
+```{r}
+#Defining A20 and TLR4 as custom GSEA terms
+
+top50TLR4 <- TLR4rank$Gene[1:50] #take top 50 of ranked genes 
+
+#assemble the top 50 genes for use as a term
+TLR4t2g <- data.frame(
+  Term = rep("TLR4", length(top50TLR4)), 
+ Symbol = top50TLR4
+) 
+#format appropriately
+TLR4t2g <- TLR4t2g %>%
+    dplyr::select(Term, Symbol) %>%
+    dplyr::mutate(Symbol = strsplit(Symbol, ', ')) %>%
+    tidyr::unnest()
+
+top50a20 <- a20rank$Gene[1:50] #take top 50 of ranked genes 
+
+
+#assemble the top 50 genes for use as a term
+A20t2g <- data.frame(
+Term = rep("A20", length(top50a20)),
+ Symbol = top50a20)
+
+#format appropriately
+A20t2g <- A20t2g %>%
+    dplyr::select(Term, Symbol) %>%
+    dplyr::mutate(Symbol = strsplit(Symbol, ', ')) %>%
+    tidyr::unnest()
+
+A20_TLR4_GSEAterms <- rbind(A20t2g, TLR4t2g)
+
+
+# Prepare gene sets based on each row (gene)
+expression_data <- (ABA_zscore[, 3:20123])
+rownames(expression_data) <- expression_data[,1]
+expression_data[,1] <- NULL
+expression_data <- t(expression_data)
+
+# Initialize an empty list to store the data frames
+brain_region_data <- list()
+
+# Iterate over each brain region (column) in expression_data
+for (region_name in colnames(expression_data)) {
+  # Extract expression values for the current brain region
+  expression_values <- expression_data[, region_name]
+  
+  # Create a data frame with two columns: gene and expression value
+  gene_df <- data.frame(
+    Gene = rownames(expression_data),
+    Expression = expression_values,
+    stringsAsFactors = FALSE
+  )
+  
+## generate features for GSEA
+geneList = gene_df[,2]
+names(geneList) = as.character(gene_df[,1])
+geneList = sort(geneList, decreasing = TRUE)
+  
+  brain_region_data[[region_name]] <- geneList
+}
+
+#Create a list for the GSEA results across each brain region.
+ES_list <- list()
+
+# Iterate over each brain region data frame
+for (region_name in names(brain_region_data)) {
+  # Perform GSEA analysis for the current brain region
+  x <- GSEA(brain_region_data[[region_name]], TERM2GENE = A20_TLR4_GSEAterms, scoreType = "std", pvalueCutoff = 1)
+  
+  # Extract NES values and store them in a data frame
+  ES <- data.frame(term = x@result$ID, ES = x@result$enrichmentScore, pvalue = x@result$pvalue)
+  
+  # Set NES values to 0 where p-value exceeds 0.05
+  ES$ES[ES$pvalue > 0.05] <- 0
+  
+  # Append the NES data frame to the list
+  ES_list[[region_name]] <- ES
+}
+
+A20_TLR4_GSEA <- bind_rows(ES_list, .id = "brain_region") %>%
+  mutate(pvalue = NULL) %>%
+  pivot_wider(names_from = term, values_from = ES) %>%
+  as.data.frame()
+
+head(A20_TLR4_GSEA)
+
+a20tlr4gsea = ggplot(A20_TLR4_GSEA, aes(x = TLR4, y = A20)) +
+  geom_point(aes(color = TLR4 + A20)) +
+  theme_classic() +  
+  theme(axis.text.x = element_text(face = "bold"),
+        axis.text.y = element_text(face = "bold")) +
+  labs(
+    x = "TLR4 Enrichment Score",
+    y = "A20 Enrichment Score",
+    title = "How are A20 and TLR4 gene sets enriched across the brain?") + 
+  scale_color_gradient2(low = "#3B9AB2", mid = "#EBCC2A", high = "#F21A00") 
+a20tlr4gsea
+```
+#Suplementary data
+##Whole brain GSEA
+```{r}
+
+A20TLR4GSEA_REGIONS <- A20TLR4GSEA %>%
+  left_join(ABA_ids, by = c("brain_region" = "structure_acronym")) %>%
+  select(!"structure_id")
+head(A20TLR4GSEA_REGIONS)
+
+
+both_up = subset(A20TLR4GSEA_REGIONS, A20 > 0 & TLR4 > 0)
+both_down = subset(A20TLR4GSEA_REGIONS, A20 < 0 & TLR4 < 0)
+A20_up = subset(A20TLR4GSEA_REGIONS, A20 > 0 & TLR4 == 0)
+tlr4_up = subset(A20TLR4GSEA_REGIONS, A20 == 0 & TLR4 > 0)
+A20_up_TLR4_down = subset(A20TLR4GSEA_REGIONS, A20 > 0 & TLR4 < 0)
+A20_down_TLR4_up =  subset(A20TLR4GSEA_REGIONS, A20 < 0 & TLR4 > 0)
+region_direction = bind_cols(both_up, both_down, A20_up, tlr4_up, A20_up_TLR4_down, A20_down_TLR4_up)
+
+```
